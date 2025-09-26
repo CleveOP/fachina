@@ -187,11 +187,11 @@ function obterParticipantesDisponiveis(pessoasJaAlocadas) {
  * @param {object[]} tarefasNormais - Lista de tarefas a serem distribuídas.
  * @returns {object} - Mapeamento de tarefa para a lista de pessoas.
  */
-function distribuirTarefasNormais(disponiveis, tarefasNormais) {
+function distribuirTarefasNormais(disponiveis, tarefas) {
   const resultadoFinal = {};
-  tarefasNormais.forEach(t => resultadoFinal[t.nome] = []);
+  tarefas.forEach(t => resultadoFinal[t.nome] = []);
 
-  const disponiveisParaSorteio = [...disponiveis];
+  const disponiveisParaSorteio = [...disponiveis]; // Cria uma cópia para não modificar a original
 
   // 1. Separar missionários dos outros participantes
   const missionariosNormalizados = MISSIONARIOS.map(normalizarString);
@@ -200,7 +200,7 @@ function distribuirTarefasNormais(disponiveis, tarefasNormais) {
 
   // 2. Criar lista de vagas e histórico de tarefas por pessoa
   let vagas = [];
-  tarefasNormais.forEach(tarefa => {
+  tarefas.forEach(tarefa => {
     for (let i = 0; i < tarefa.qtd; i++) {
       vagas.push(tarefa.nome);
     }
@@ -313,27 +313,24 @@ function sortear() {
   // 2. Obter disponíveis. Pessoas dos quartos CONTINUAM disponíveis.
   const { disponiveis, responsavelAlmoco } = obterParticipantesDisponiveis(pessoasAlocadas);
 
-  // 3. Filtrar tarefas normais (que não são especiais)
-  const tarefasNormais = tarefas.filter(t =>
+  // 3. Filtrar tarefas que realmente serão sorteadas (todas exceto as especiais)
+  const tarefasParaSorteio = tarefas.filter(t =>
     t.nome !== TAREFA_ALMOCO &&
     t.nome.toLowerCase() !== "limpeza quarto grande" &&
     t.nome.toLowerCase() !== "limpeza quarto pequeno"
   );
 
   // 4. Preparar lista de pessoas para o sorteio geral
-  // A função distribuirTarefasNormais já separa os missionários internamente.
   const disponiveisSorteio = disponiveis.filter(p => p !== responsavelAlmoco);
 
   // 5. Distribuir tarefas normais
-  const resultadoTarefasNormais = distribuirTarefasNormais(disponiveisSorteio, tarefasNormais);
+  const resultadoTarefasNormais = distribuirTarefasNormais(disponiveisSorteio, tarefasParaSorteio);
   if (!resultadoTarefasNormais) {
     return; // Para a execução se não houver pessoas suficientes
   }
 
-  // 6. Unir todos os resultados e salvar
+  // 6. Unir todos os resultados
   Object.assign(resultadoSorteio, resultadoTarefasNormais);
-
-  // 6.1 Adiciona o responsável do almoço ao resultado final, sobreescrevendo se necessário
   const tarefaAlmoco = tarefas.find(t => t.nome === TAREFA_ALMOCO);
   if (tarefaAlmoco) {
     resultadoSorteio[TAREFA_ALMOCO] = responsavelAlmoco ? [responsavelAlmoco] : [];
@@ -381,6 +378,7 @@ function atualizarHistorico() {
   ul.innerHTML = "";
   historico.slice().reverse().forEach((sorteio, i) => {
     const li = document.createElement("li");
+    li.style.border = "1px solid #ccc"; li.style.padding = "10px"; li.style.marginBottom = "10px"; li.style.borderRadius = "5px";
     let html = `<strong>${sorteio.data}</strong> <button onclick="removerDataHistorico(${i})" style="background:#eb3b5a;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:0.9em;cursor:pointer;">Remover data</button><br>`;
     
     const tarefasOrdenadas = Object.keys(sorteio.tarefas).sort();
