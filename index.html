@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sorteio de Tarefas Semanais</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Sorteio de Tarefas Semanais</h1>
+
+  <section>
+    <h2>Participantes
+      <button id="btnTogglePessoas" onclick="toggleLista('listaParticipantes', 'btnTogglePessoas')" style="font-size:0.9em; margin-left:10px;">Minimizar</button>
+    </h2>
+    <input type="text" id="novoParticipante" placeholder="Nome do participante" />
+    <button onclick="adicionarParticipante()">Adicionar Participante</button>
+    <ul id="listaParticipantes"></ul>
+  </section>
+
+
+  <section>
+    <h2>Tarefas
+      <button id="btnToggleTarefas" onclick="toggleLista('listaTarefas', 'btnToggleTarefas')" style="font-size:0.9em; margin-left:10px;">Minimizar</button>
+    </h2>
+    <input type="text" id="novaTarefa" placeholder="Nome da tarefa" />
+    <input type="number" id="qtdPessoas" placeholder="Qtd pessoas" min="1" />
+    <button onclick="adicionarTarefa()">Adicionar Tarefa</button>
+    <ul id="listaTarefas"></ul>
+  </section>
+
+  <section>
+    <h2>Responsável pelo Almoço</h2>
+    <select id="responsavelAlmoco"></select>
+  </section>
+
+  <section>
+    <button onclick="sortear()">🎲 Sortear Tarefas</button>
+    <button onclick="resetarSistema()">🔄 Resetar para padrão</button>
+    <div id="resultadoSorteio"></div>
+  </section>
+
+  <section>
+  <h2>Histórico de Sorteios</h2>
+  <button onclick="limparHistoricoTarefas()" style="margin-bottom:8px;background:#eb3b5a;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;">Limpar Todo o Histórico</button>
+  <ul id="historicoSorteios"></ul>
+  </section>
+
+
+
+  <script src="main.js"></script>
+</body>
+</html>
