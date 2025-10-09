@@ -1,3 +1,204 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const tarefas = [
+    "Banheiro",
+    "Cozinha",
+    "Varanda",
+    "Quarto 1",
+    "Quarto 2",
+    "Louça",
+    "Varrer Casa",
+    "Lixo",
+  ];
+
+  let pessoas = [];
+  let historico = JSON.parse(localStorage.getItem("historicoTarefas")) || [];
+  let ultimaPessoaSorteada = null;
+
+  // ========== Funções auxiliares ==========
+  const salvarHistorico = () => {
+    localStorage.setItem("historicoTarefas", JSON.stringify(historico));
+  };
+
+  const atualizarSelectPessoas = () => {
+    const selects = document.querySelectorAll(
+      "#responsavelAlmoco, #missionario1, #missionario2"
+    );
+    selects.forEach((select) => {
+      const valorSelecionado = select.value;
+      select.innerHTML = "<option value=''>-- Selecione --</option>";
+      pessoas.forEach((pessoa) => {
+        const option = document.createElement("option");
+        option.value = pessoa;
+        option.textContent = pessoa;
+        if (pessoa === valorSelecionado) option.selected = true;
+        select.appendChild(option);
+      });
+    });
+  };
+
+  const atualizarListaPessoas = () => {
+    const lista = document.getElementById("listaPessoas");
+    lista.innerHTML = "";
+    pessoas.forEach((pessoa, index) => {
+      const li = document.createElement("li");
+      li.textContent = pessoa;
+      const btn = document.createElement("button");
+      btn.textContent = "❌";
+      btn.onclick = () => {
+        pessoas.splice(index, 1);
+        atualizarListaPessoas();
+        atualizarSelectPessoas();
+      };
+      li.appendChild(btn);
+      lista.appendChild(li);
+    });
+  };
+
+  const adicionarPessoa = () => {
+    const nome = document.getElementById("nomePessoa").value.trim();
+    if (nome && !pessoas.includes(nome)) {
+      pessoas.push(nome);
+      atualizarListaPessoas();
+      atualizarSelectPessoas();
+      document.getElementById("nomePessoa").value = "";
+    }
+  };
+
+  const calcularDistribuicao = () => {
+    const contagem = {};
+    historico.forEach((registro) => {
+      Object.values(registro.resultado).forEach((pessoa) => {
+        contagem[pessoa] = (contagem[pessoa] || 0) + 1;
+      });
+    });
+    return contagem;
+  };
+
+  const obterParticipantesDisponiveis = (pessoasAlocadas = []) => {
+    const distribuicao = calcularDistribuicao();
+    const disponiveis = pessoas.filter((p) => !pessoasAlocadas.includes(p));
+
+    if (disponiveis.length === 0) return { disponiveis: [], distribuicao };
+
+    const menorQtd = Math.min(...disponiveis.map((p) => distribuicao[p] || 0));
+    const maisDisponiveis = disponiveis.filter(
+      (p) => (distribuicao[p] || 0) === menorQtd
+    );
+
+    return { disponiveis: maisDisponiveis, distribuicao };
+  };
+
+  const obterParticipantesParaMissao = (missionariosAlocados = []) => {
+    const { disponiveis } = obterParticipantesDisponiveis(missionariosAlocados);
+    return disponiveis;
+  };
+
+  const atualizarHistorico = () => {
+    const tabela = document
+      .getElementById("tabelaHistorico")
+      .getElementsByTagName("tbody")[0];
+    tabela.innerHTML = "";
+    historico
+      .slice(-10)
+      .reverse()
+      .forEach((registro) => {
+        const linha = tabela.insertRow();
+        const celulaData = linha.insertCell(0);
+        const celulaResultado = linha.insertCell(1);
+
+        celulaData.textContent = registro.data;
+        celulaResultado.textContent = Object.entries(registro.resultado)
+          .map(([tarefa, pessoa]) => `${tarefa}: ${pessoa}`)
+          .join(", ");
+      });
+  };
+
+  const exibirResultado = (resultado) => {
+    const div = document.getElementById("resultadoSorteio");
+    div.innerHTML = "";
+    Object.entries(resultado).forEach(([tarefa, pessoa]) => {
+      const p = document.createElement("p");
+      p.textContent = `${tarefa}: ${pessoa}`;
+      div.appendChild(p);
+    });
+  };
+
+  // ========== Função principal ==========
+  const sortear = () => {
+    if (pessoas.length < 3) {
+      alert("Adicione pelo menos 3 pessoas para sortear.");
+      return;
+    }
+
+    const resultado = {};
+    let pessoasAlocadas = [];
+
+    // PASSO 0: Identificar e alocar o responsável pelo almoço PRIMEIRO.
+    const responsavelAlmoco =
+      document.getElementById("responsavelAlmoco").value || "";
+    if (responsavelAlmoco) {
+      pessoasAlocadas.push(responsavelAlmoco);
+      resultado["Fazer Almoço"] = responsavelAlmoco;
+    }
+
+    // PASSO 1: Definir missionários (caso existam)
+    const missionario1 = document.getElementById("missionario1").value || "";
+    const missionario2 = document.getElementById("missionario2").value || "";
+    const missionariosAlocados = [missionario1, missionario2].filter(Boolean);
+    pessoasAlocadas.push(...missionariosAlocados);
+
+    // PASSO 2: Sortear quartos para missionários, se definidos
+    ["Quarto 1", "Quarto 2"].forEach((quarto, i) => {
+      if (missionariosAlocados[i]) {
+        resultado[quarto] = missionariosAlocados[i];
+      }
+    });
+
+    // PASSO 3: Agora preparamos a lista final de pessoas já alocadas
+    let pessoasAlocadasFinal = [...new Set(pessoasAlocadas)];
+
+    // PASSO 4: Sortear o restante das tarefas
+    tarefas.forEach((tarefa) => {
+      if (["Quarto 1", "Quarto 2"].includes(tarefa)) return; // já sorteadas
+
+      const { disponiveis } = obterParticipantesDisponiveis(pessoasAlocadasFinal);
+
+      if (disponiveis.length === 0) return;
+
+      let sorteado;
+      do {
+        sorteado = disponiveis[Math.floor(Math.random() * disponiveis.length)];
+      } while (sorteado === ultimaPessoaSorteada && disponiveis.length > 1);
+
+      ultimaPessoaSorteada = sorteado;
+      resultado[tarefa] = sorteado;
+      pessoasAlocadasFinal.push(sorteado);
+    });
+
+    // PASSO 5: Registrar histórico e exibir resultado
+    historico.push({ data: new Date().toLocaleString(), resultado });
+    if (historico.length > 50) historico.shift();
+
+    salvarHistorico();
+    exibirResultado(resultado);
+    atualizarHistorico();
+  };
+
+  // ========== Ligações dos botões ==========
+  document.getElementById("btnAdicionarPessoa").onclick = adicionarPessoa;
+  document.getElementById("btnSortear").onclick = sortear;
+  document.getElementById("btnLimparHistorico").onclick = () => {
+    if (confirm("Tem certeza que deseja limpar o histórico?")) {
+      historico = [];
+      salvarHistorico();
+      atualizarHistorico();
+    }
+  };
+
+  atualizarListaPessoas();
+  atualizarSelectPessoas();
+  atualizarHistorico();
+});
 // Limpa todo o histórico de sorteios (tarefas e almoço)
 function limparHistoricoTarefas() {
   if (confirm("Tem certeza que deseja limpar todo o histórico de sorteios?")) {
@@ -28,7 +229,8 @@ const GRUPO_QUARTO_GRANDE = ["Cleverson", "Vicente", "Marcelo", "André", "Artur
 const GRUPO_QUARTO_PEQUENO = ["Rafael", "Anderson", "Henrique", "Junior"];
 
 // "Missionários" que devem ser alocados em tarefas distintas.
-const MISSIONARIOS = ["Leia", "Laura", "Marcio", "Alaor", "Talita", "Ueslei", "Fernanda", "Felipe", "Karina"];
+const MISSIONARIOS = ["Leia", "Laura", "Marcio", "Alaor", "Talita", "Ueslei", "Fernanda", "Felipe"];
+
 
 // --- DADOS PADRÃO ---
 const participantesPadrao = [
@@ -52,11 +254,13 @@ const tarefasPadrao = [
 let participantes = JSON.parse(localStorage.getItem("participantes")) || [...participantesPadrao];
 let tarefas = JSON.parse(localStorage.getItem("tarefas")) || [...tarefasPadrao];
 let historico = JSON.parse(localStorage.getItem("historicoSorteios")) || [];
+let missionarioOffset = parseInt(localStorage.getItem("missionarioOffset")) || 0;
 
 function salvarDados() {
   localStorage.setItem("participantes", JSON.stringify(participantes));
   localStorage.setItem("tarefas", JSON.stringify(tarefas));
   localStorage.setItem("historicoSorteios", JSON.stringify(historico));
+  localStorage.setItem("missionarioOffset", missionarioOffset);
 }
 
 // --- FUNÇÕES DE MANIPULAÇÃO DE PARTICIPANTES E TAREFAS ---
@@ -150,6 +354,10 @@ function normalizarString(str) {
  * @returns {string} A pessoa sorteada.
  */
 function sortearPessoaParaTarefaComRodizio(grupo, nomeTarefa) {
+  if (!grupo || grupo.length === 0) {
+    return null; // Retorna nulo se o grupo for inválido ou vazio
+  }
+
   const contagemTarefas = {};
   grupo.forEach(p => contagemTarefas[p] = 0);
   historico.forEach(sorteio => {
@@ -169,39 +377,72 @@ function sortearPessoaParaTarefaComRodizio(grupo, nomeTarefa) {
 }
 
 /**
+ * Distribui tarefas para os missionários usando um sistema de rodízio circular.
+ * Agora aceita um segundo parâmetro opcional `nomeExcluido` — usado para garantir que
+ * o responsável pelo almoço (ou outro nome) não seja alocado como missionário.
+ * @param {object[]} tarefasParaRodizio - A lista de tarefas que os missionários irão revezar.
+ * @param {string} [nomeExcluido] - Nome a ser excluído do rodízio (ex: responsável pelo almoço).
+ * @returns {{resultado: object, pessoasAlocadas: string[], tarefasAlocadas: string[]}}
+ */
+function distribuirTarefasMissionariosComRodizio(tarefasParaRodizio, nomeExcluido = null) {
+  const resultado = {};
+  const pessoasAlocadas = [];
+  const tarefasAlocadas = [];
+
+  // Filtra missionários que estão na lista de participantes atual e que não sejam o nomeExcluido
+  const missionariosDisponiveis = MISSIONARIOS.filter(m => participantes.includes(m) && m !== nomeExcluido);
+  const numMissionarios = missionariosDisponiveis.length;
+  const numTarefas = tarefasParaRodizio.length;
+
+  if (numMissionarios === 0 || numTarefas === 0) {
+    return { resultado, pessoasAlocadas, tarefasAlocadas };
+  }
+
+  // 1. Executa o rodízio circular, atribuindo um missionário para cada tarefa possível.
+  const iteracoes = Math.min(numMissionarios, numTarefas);
+  for (let i = 0; i < iteracoes; i++) {
+    const missionario = missionariosDisponiveis[i];
+    const tarefa = tarefasParaRodizio[(i + missionarioOffset) % numTarefas].nome;
+
+    // Garante que a tarefa existe na lista principal de tarefas
+    if (tarefas.some(t => t.nome === tarefa)) {
+      resultado[tarefa] = [missionario]; // Garante apenas um por tarefa do rodízio
+      pessoasAlocadas.push(missionario);
+      tarefasAlocadas.push(tarefa);
+    }
+  }
+
+  return { resultado, pessoasAlocadas, tarefasAlocadas };
+}
+/**
  * Obtém a lista de participantes disponíveis para o sorteio geral.
  * @param {string[]} pessoasJaAlocadas - Pessoas que já foram sorteadas para tarefas especiais.
  * @returns {{disponiveis: string[], responsavelAlmoco: string}}
- */
-function obterParticipantesDisponiveis(pessoasJaAlocadas) {
-  let disponiveis = [...participantes];
-  
-  let responsavelAlmoco = document.getElementById("responsavelAlmoco").value || "";
-  // Apenas os missionários e o responsável pelo almoço são tratados separadamente.
-  return { disponiveis, responsavelAlmoco };
+ */function obterParticipantesDisponiveis(pessoasJaAlocadas) {
+  // Filtra os participantes, removendo quem já foi alocado em tarefas especiais.
+  let disponiveis = participantes.filter(p => !pessoasJaAlocadas.includes(p));
+  return { disponiveis };
 }
 
 /**
  * Distribui as tarefas normais entre os participantes disponíveis.
  * @param {string[]} disponiveis - Lista de pessoas disponíveis.
  * @param {object[]} tarefasNormais - Lista de tarefas a serem distribuídas.
+ * @param {string[]} pessoasJaAlocadas - Lista de pessoas que não devem ser sorteadas novamente.
+ * @param {object} resultadoParcial - O objeto de resultado do sorteio para ser completado.
  * @returns {object} - Mapeamento de tarefa para a lista de pessoas.
  */
-function distribuirTarefasNormais(disponiveis, tarefas) {
-  const resultadoFinal = {};
-  tarefas.forEach(t => resultadoFinal[t.nome] = []);
-
-  const disponiveisParaSorteio = [...disponiveis]; // Cria uma cópia para não modificar a original
-
-  // 1. Separar missionários dos outros participantes
-  const missionariosNormalizados = MISSIONARIOS.map(normalizarString);
-  const missionariosDisponiveis = disponiveisParaSorteio.filter(p => missionariosNormalizados.includes(normalizarString(p)));
-  let outrosDisponiveis = disponiveisParaSorteio.filter(p => !missionariosNormalizados.includes(normalizarString(p)));
+function distribuirTarefasNormais(disponiveisParaSorteio, tarefas, resultadoParcial = {}) {
+  // Começa com o resultado parcial (dos missionários) e o completa.
+  const resultadoFinal = JSON.parse(JSON.stringify(resultadoParcial));
 
   // 2. Criar lista de vagas e histórico de tarefas por pessoa
   let vagas = [];
   tarefas.forEach(tarefa => {
-    for (let i = 0; i < tarefa.qtd; i++) {
+    // Calcula quantas vagas ainda estão abertas para esta tarefa
+    const vagasOcupadas = resultadoFinal[tarefa.nome] ? resultadoFinal[tarefa.nome].length : 0;
+    const vagasAbertas = tarefa.qtd - vagasOcupadas;
+    for (let i = 0; i < vagasAbertas; i++) {
       vagas.push(tarefa.nome);
     }
   });
@@ -221,126 +462,127 @@ function distribuirTarefasNormais(disponiveis, tarefas) {
     });
   });
 
-  // 3. Alocar missionários em tarefas distintas, evitando repetição
-  const tarefasUnicas = [...new Set(vagas)];
-  let missionariosEmbaralhados = [...missionariosDisponiveis].sort(() => Math.random() - 0.5);
-  const tarefasAlocadasParaMissionarios = [];
-  const missionariosAtribuidos = [];
-
-  for (const missionario of missionariosEmbaralhados) {
-    // Ordena tarefas: as que ele nunca fez primeiro, depois as que fez há mais tempo
-    const tarefasOrdenadas = tarefasUnicas.sort((a, b) => {
-      const fezA = historicoTarefasPessoa[missionario].includes(a);
-      const fezB = historicoTarefasPessoa[missionario].includes(b);
-      if (fezA === fezB) return 0;
-      return fezA ? 1 : -1;
-    });
-
-    for (const tarefa of tarefasOrdenadas) {
-      // Garante que a tarefa ainda não foi pega por outro missionário
-      if (tarefasAlocadasParaMissionarios.includes(tarefa)) continue;
-
-      const indexVaga = vagas.indexOf(tarefa);
-      if (indexVaga !== -1) {
-        resultadoFinal[tarefa].push(missionario);
-        tarefasAlocadasParaMissionarios.push(tarefa); // Marca a tarefa como ocupada por um missionário
-        missionariosAtribuidos.push(missionario);
-        vagas.splice(indexVaga, 1); // Remove apenas UMA vaga preenchida
-        break; // Próximo missionário
-      }
-    }
-  }
-
-  // 3.1. Alocar missionários restantes em tarefas de fallback (cozinha, sala)
-  const missionariosNaoAtribuidos = missionariosDisponiveis.filter(m => !missionariosAtribuidos.includes(m));
-  if (missionariosNaoAtribuidos.length > 0) {
-    const tarefasFallback = ["Limpar cozinha", "Limpar Sala"];
-    for (const missionario of missionariosNaoAtribuidos) {
-      let alocado = false;
-      for (const tarefaFallback of tarefasFallback) {
-        const indexVaga = vagas.indexOf(tarefaFallback);
-        if (indexVaga !== -1) {
-          resultadoFinal[tarefaFallback].push(missionario);
-          vagas.splice(indexVaga, 1); // Ocupa a vaga
-          alocado = true;
-          break; // Missionário alocado, vai para o próximo
-        }
-      }
-    }
-  }
-
-
   // 4. Alocar as pessoas restantes nas vagas que sobraram
-  outrosDisponiveis = outrosDisponiveis.sort(() => Math.random() - 0.5);
+  let pessoasParaAlocar = [...disponiveisParaSorteio].sort(() => Math.random() - 0.5);
   vagas = vagas.sort(() => Math.random() - 0.5);
 
-  while (vagas.length > 0 && outrosDisponiveis.length > 0) {
+  while (vagas.length > 0 && pessoasParaAlocar.length > 0) {
     const vaga = vagas.shift();
     // Tenta encontrar alguém que não fez a tarefa
-    let pessoaIndex = outrosDisponiveis.findIndex(p => !historicoTarefasPessoa[p].includes(vaga));
+    let pessoaIndex = pessoasParaAlocar.findIndex(p => !historicoTarefasPessoa[p].includes(vaga));
     
     // Se todos já fizeram, pega o primeiro da lista embaralhada
     if (pessoaIndex === -1) {
       pessoaIndex = 0;
     }
     
-    const pessoa = outrosDisponiveis.splice(pessoaIndex, 1)[0];
+    const pessoa = pessoasParaAlocar.splice(pessoaIndex, 1)[0];
+    if (!resultadoFinal[vaga]) {
+      resultadoFinal[vaga] = [];
+    }
     resultadoFinal[vaga].push(pessoa);
+  }
+
+  // 5. Alocar pessoas que sobraram em tarefas de fallback (cozinha, sala)
+  if (pessoasParaAlocar.length > 0) {
+    const tarefasFallback = ["Limpar cozinha", "Limpar Sala"];
+    let fallbackIndex = 0;
+
+    pessoasParaAlocar.forEach(pessoa => {
+      const tarefaAlvo = tarefasFallback[fallbackIndex % tarefasFallback.length];
+      if (resultadoFinal[tarefaAlvo]) {
+        resultadoFinal[tarefaAlvo].push(pessoa);
+      }
+      fallbackIndex++;
+    });
   }
 
   return resultadoFinal;
 }
 
 function sortear() {
-  const resultadoSorteio = {};
-  const pessoasAlocadas = [];
+  let resultadoSorteio = {};
+  let pessoasAlocadas = [];
+
+  // PASSO 0: Identificar e alocar o responsável pelo almoço PRIMEIRO.
+  const responsavelAlmoco = document.getElementById("responsavelAlmoco").value || "";
+  if (responsavelAlmoco) {
+    pessoasAlocadas.push(responsavelAlmoco);
+  }
 
   // 1. Sorteio especial dos quartos com rodízio
-  const tarefaQuartoGrande = tarefas.find(t => t.nome.toLowerCase() === "limpeza quarto grande");
+  const tarefaQuartoGrande = tarefas.find(t => t.nome.toLowerCase() === "limpeza quarto grande".toLowerCase());
   if (tarefaQuartoGrande) {
-    const sorteado = sortearPessoaParaTarefaComRodizio(GRUPO_QUARTO_GRANDE, tarefaQuartoGrande.nome);
-    resultadoSorteio[tarefaQuartoGrande.nome] = [sorteado];
-    pessoasAlocadas.push(sorteado);
+    const grupoValido = GRUPO_QUARTO_GRANDE.filter(p => participantes.includes(p));
+    const sorteado = sortearPessoaParaTarefaComRodizio(grupoValido, tarefaQuartoGrande.nome);
+    if (sorteado) {
+      resultadoSorteio[tarefaQuartoGrande.nome] = [sorteado];
+      pessoasAlocadas.push(sorteado); // Adiciona à lista de já alocados
+    }
   }
 
-  const tarefaQuartoPequeno = tarefas.find(t => t.nome.toLowerCase() === "limpeza quarto pequeno");
+  const tarefaQuartoPequeno = tarefas.find(t => t.nome.toLowerCase() === "limpeza quarto pequeno".toLowerCase());
   if (tarefaQuartoPequeno) {
-    const sorteado = sortearPessoaParaTarefaComRodizio(GRUPO_QUARTO_PEQUENO, tarefaQuartoPequeno.nome);
-    resultadoSorteio[tarefaQuartoPequeno.nome] = [sorteado];
-    pessoasAlocadas.push(sorteado);
+    const grupoValido = GRUPO_QUARTO_PEQUENO.filter(p => participantes.includes(p));
+    const sorteado = sortearPessoaParaTarefaComRodizio(grupoValido, tarefaQuartoPequeno.nome);
+    if (sorteado) {
+      resultadoSorteio[tarefaQuartoPequeno.nome] = [sorteado];
+      pessoasAlocadas.push(sorteado); // Adiciona à lista de já alocados
+    }
   }
 
-  // 2. Obter disponíveis. Pessoas dos quartos CONTINUAM disponíveis.
-  const { disponiveis, responsavelAlmoco } = obterParticipantesDisponiveis(pessoasAlocadas);
-
-  // 3. Filtrar tarefas que realmente serão sorteadas (todas exceto as especiais)
-  const tarefasParaSorteio = tarefas.filter(t =>
-    t.nome !== TAREFA_ALMOCO &&
-    t.nome.toLowerCase() !== "limpeza quarto grande" &&
-    t.nome.toLowerCase() !== "limpeza quarto pequeno"
+  // 2. Rodízio dos Missionários em TODAS as tarefas gerais
+  // Filtra as tarefas que não são especiais (quartos, almoço) para o rodízio
+  const tarefasParaRodizioMissionarios = tarefas.filter(t =>
+    t.nome !== TAREFA_ALMOCO && t.nome.toLowerCase() !== "limpeza quarto grande".toLowerCase() && t.nome.toLowerCase() !== "limpeza quarto pequeno".toLowerCase()
   );
-
-  // 4. Preparar lista de pessoas para o sorteio geral
-  const disponiveisSorteio = disponiveis.filter(p => p !== responsavelAlmoco);
-
-  // 5. Distribuir tarefas normais
-  const resultadoTarefasNormais = distribuirTarefasNormais(disponiveisSorteio, tarefasParaSorteio);
-  if (!resultadoTarefasNormais) {
-    return; // Para a execução se não houver pessoas suficientes
+  // <-- ALTERAÇÃO: passa responsavelAlmoco para garantir que essa pessoa não seja alocada como missionário
+  const { resultado: resultadoMissionarios, pessoasAlocadas: missionariosAlocados } = distribuirTarefasMissionariosComRodizio(tarefasParaRodizioMissionarios, responsavelAlmoco);
+  // Mescla os resultados dos missionários no resultado principal
+  for (const tarefa in resultadoMissionarios) {
+    if (!resultadoSorteio[tarefa]) resultadoSorteio[tarefa] = [];
+    resultadoSorteio[tarefa].push(...resultadoMissionarios[tarefa]);
   }
 
-  // 6. Unir todos os resultados
-  Object.assign(resultadoSorteio, resultadoTarefasNormais);
+  // 3. Obter disponíveis para o sorteio geral
+  let pessoasAlocadasFinal = [...new Set([...pessoasAlocadas, ...missionariosAlocados])];
+
+  // Garante que o responsável pelo almoço NÃO entre no sorteio das outras tarefas (proteção extra)
+  if (responsavelAlmoco) {
+    pessoasAlocadasFinal = [...new Set([...pessoasAlocadasFinal, responsavelAlmoco])];
+  }
+
+  let { disponiveis } = obterParticipantesDisponiveis(pessoasAlocadasFinal);
+
+  // Remover explicitamente o responsável pelo almoço da lista de disponíveis (garantia)
+  if (responsavelAlmoco) {
+    disponiveis = disponiveis.filter(p => p !== responsavelAlmoco);
+  }
+
+  // 4. Filtrar tarefas restantes para o sorteio geral
+  // Pega todas as tarefas, exceto o almoço, para serem processadas no sorteio geral.
+  const tarefasParaSorteioGeral = tarefas.filter(t => t.nome !== TAREFA_ALMOCO);
+
+  // 5. Distribuir tarefas normais para o restante do pessoal
+  // A função agora recebe o resultado parcial e o completa com as pessoas restantes.
+  resultadoSorteio = distribuirTarefasNormais(disponiveis, tarefasParaSorteioGeral, resultadoSorteio);
+
+  // 6. Unir todos os resultados em um objeto final
   const tarefaAlmoco = tarefas.find(t => t.nome === TAREFA_ALMOCO);
   if (tarefaAlmoco) {
     resultadoSorteio[TAREFA_ALMOCO] = responsavelAlmoco ? [responsavelAlmoco] : [];
   }
 
+  // 7. Salvar e exibir
   const dataHoje = new Date().toLocaleDateString("pt-BR");
+
+  // Atualiza o offset dos missionários para o próximo sorteio
+  missionarioOffset = (missionarioOffset + 1) % (tarefasParaRodizioMissionarios.length || 1);
+
   historico.push({ data: dataHoje, tarefas: resultadoSorteio });
   salvarDados();
 
-  // 7. Exibir resultados e atualizar a UI
+  // Exibir resultados e atualizar a UI
   mostrarResultado(resultadoSorteio, dataHoje);
   atualizarHistorico();
 }
@@ -396,6 +638,7 @@ function resetarSistema() {
   if (confirm("Tem certeza que deseja resetar os participantes e tarefas para o padrão? O histórico será mantido.")) {
     participantes = [...participantesPadrao];
     tarefas = [...tarefasPadrao];
+    missionarioOffset = 0; // Reseta o rodízio também
     salvarDados();
     atualizarListaParticipantes();
     atualizarListaTarefas();
